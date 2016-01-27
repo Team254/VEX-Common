@@ -1,0 +1,20 @@
+The following information must be filled out for every submission
+for a CS2N competition in order to qualify for prizes.
+
+This completed form should be included in the zipped folder along with the program(s)
+used to complete the competition and any extra header files (optional)
+used by the program(s). To include more than five program runs, simply copy one of the existing
+sections and rename it 'Sixth Program Run', 'Seventh Program Run', etc. If you do not need to 
+run your program 5 times, simply leave any unused slots blank.
+
+Failure to fill out this form properly will result in the disqualification of the submission.
+
+*****************
+Name:
+Competition:
+
+First Program Name: 254RVW.c
+Second Program Name:
+Third Program Name:
+Fourth Program Name:
+Fifth Program Name:
