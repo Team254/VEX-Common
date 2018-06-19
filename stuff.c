@@ -5,7 +5,7 @@
 #pragma platform(VEX2)
 #pragma competitionControl(Competition)
 #include "Vex_Competition_Includes.c"
-#include "BNSLibrary-master/BNSLib.h"
+#include "BNSLibrary-master/BNSLib.h" //library with PID stuff, ArrayLists + more
 
 /************************************************************************************************
 
@@ -17,6 +17,7 @@ bool RevLeftOrRight = false;
 
 double time = 0;
 
+//used mostly with LCD screen
 int currentAuton = 0;
 string autonModes[0]; // = {/*put all your autons here, in name format (used for LCD)*/};
 
@@ -31,7 +32,7 @@ typedef struct{
 	bool moving, minMaxReversed;
 } PIDObject;
 
-PIDObject liftObjR;
+PIDObject liftObjR, drivebaseObjL, drivebaseObjR;
 
 void setValues(){
 
@@ -96,6 +97,7 @@ task drivebase(){
 	while(true){
 
 		//during autonomous, set drivebase power to output of PID * adjustment for LPow, RPow, which would directly affect max power out (for use in turning slowly, for example. Just like how you would control the robot not @ max speed during driver)
+		//note: code in if-true statement for 2 motor drivebase
 		if(bIfiAutonomousMode){
 			motor[port1] = (int)((LPow/127.0)*PIDa(&drivebaseObjL));
 			motor[port2] = (int)((RPow/127.0)*PIDa(&drivebaseObjR));
@@ -103,9 +105,8 @@ task drivebase(){
 		else{
 			if(abs(vexRT[Ch3])+abs(vexRT[Ch1]) <= 20){//deadzone check
 				//if in deadzone, use PID
-				motor[LDEnc] = PIDa(&drivebaseObjL);
-				motor[RDEnc] = PIDa(&drivebaseObjR);
-				driver = false;
+				motor[port1] = PIDa(&drivebaseObjL);
+				motor[port2] = PIDa(&drivebaseObjR);
 
 			}
 
@@ -157,7 +158,7 @@ void startTasksPrerecorded(){
 //handles LCD screen, for choosing auton mode
 task autonOptions(){
 	displayLCDPos(0,5);
-	displayNextLCDString(autonModes[currentAuton]);
+	displayNextLCDString(autonModes[currentAuton]);//not sure about these errors below, it was working the last time I uploaded to my robot...
 	while(true){
 		if(nLCDButtons){
 
@@ -189,125 +190,22 @@ AUTON FUNCTIONS- functions for doing various tasks in auton, like liftToPosition
 
 *************************************************************************************************/
 
-//checks if drivebase has arrived to its proposed position and autoPID is true
-bool driveInPos(){
-	return (drivebaseObjL.targetValue == drivebaseObjL.actualValue && drivebaseObjR.targetValue == drivebaseObjR.actualValue);
-
-}
-
-
-
-void driveToPos(int UDPow, int LRPow,int LTarget, int RTarget){
-	LPow = UDPow + LRPow;
-	RPow = UDPow - LRPow;
-	drivebaseObjL.moving = drivebaseObjR.moving = true;
-	if(!RevLeftOrRight){
-		drivebaseObjL.targetValue = LTarget;
-		drivebaseObjR.targetValue = RTarget;
-	}
-	else{
-		drivebaseObjL.targetValue = RTarget;
-		drivebaseObjR.targetValue = LTarget;
-	}
-	if(drivebaseObjL.actualValue > drivebaseObjL.targetValue){
-
-		if(drivebaseObjR.actualValue > drivebaseObjR.targetValue){
-			while(!(drivebaseObjL.actualValue <= drivebaseObjL.targetValue+10 && drivebaseObjR.actualValue <= drivebaseObjR.targetValue+10)){
-				motor[LDEnc] = (int)(1.0*PIDa(&drivebaseObjL)*(LPow/127.0));
-				motor[RDEnc] = (int)(1.0*PIDa(&drivebaseObjR)*(RPow/127.0));
-			}
-		}
-		else{
-			while(!(drivebaseObjL.actualValue <= drivebaseObjL.targetValue+10 && drivebaseObjR.actualValue >= drivebaseObjR.targetValue-10)){
-				motor[LDEnc] = (int)(1.0*PIDa(&drivebaseObjL)*(LPow/127.0));
-				motor[RDEnc] = (int)(1.0*PIDa(&drivebaseObjR)*(RPow/127.0));
-			}
-		}
-	}
-	else{
-		if(drivebaseObjR.actualValue > drivebaseObjR.targetValue){
-			while(!(drivebaseObjL.actualValue >= drivebaseObjL.targetValue-10 && drivebaseObjR.actualValue <= drivebaseObjR.targetValue+10)){
-				motor[LDEnc] = (int)(1.0*PIDa(&drivebaseObjL)*(LPow/127.0));
-				motor[RDEnc] = (int)(1.0*PIDa(&drivebaseObjR)*(RPow/127.0));
-			}
-		}
-		else{
-			while(!(drivebaseObjL.actualValue >= drivebaseObjL.targetValue-10 && drivebaseObjR.actualValue >= drivebaseObjR.targetValue-10)){
-				motor[LDEnc] = (int)(1.0*PIDa(&drivebaseObjL)*(LPow/127.0));
-				motor[RDEnc] = (int)(1.0*PIDa(&drivebaseObjR)*(RPow/127.0));
-			}
-		}
-	}
-	LPow = RPow = UDPow;
-	drivebaseObjL.moving = drivebaseObjR.moving = false;
-}
-
-void driveToPos(int power, int LTarget, int RTarget){
-	driveToPos(power, 0, LTarget, RTarget);
-}
-
-void driveToPos(int LTarget, int RTarget){
-	driveToPos(127, 0, LTarget, RTarget);
-}
-
-void driveUntil(bool *statement, int UDPow, int LRPow){
-	LPow = UDPow + LRPow;
-	RPow = UDPow - LRPow;
-	drivebaseObjL.moving = drivebaseObjR.moving = true;
-	while(!statement){
-		drivebaseObjL.targetValue = drivebaseObjL.actualValue+(UDPow*1000);
-		drivebaseObjR.targetValue = drivebaseObjR.actualValue+(UDPow*1000);
-	}
-	drivebaseObjL.targetValue = drivebaseObjL.actualValue;
-	drivebaseObjR.targetValue = drivebaseObjR.actualValue;
-	LPow = RPow = UDPow;
-	drivebaseObjL.moving = drivebaseObjR.moving = false;
-}
-
-void driveUntil(bool *statement){
-	driveUntil(statement, 127, 0);
-}
-
-void driveUntil(bool *statement, int UDPow){
-	driveUntil(statement, UDPow, 0);
-}
-
-bool liftMoving(){
-	return liftObjL.moving;
-}
-//example: liftToPos
-//pos is whatever position you want your lift to be
-//note that there should be a task that handles (runs PID on) the lift or whatever you want to control
-/*
-void liftToPos(int pos){
-	liftObjL.moving = liftObjR.moving = true;
-	liftObjL.targetValue = liftObjR.targetValue = pos;
-	waitUntil(liftNearLevel());
-	liftObjL.moving = liftObjR.moving = false;
-}
-*/
-
+//example use: liftCToPos
+//lifts cone lift from ITZ to a certain position w/ PID active
 void liftCToPos(int pos){
-	//CLiftObj.moving = true;
-	CLiftObj.targetValue = pos;
-	waitUntil(CLiftNearLevel());
-	//CLiftObj.moving = false;
+	liftObjR.targetValue = pos;//PID function running during auton
+	waitUntil(CLiftNearLevel());//important unless you want to multitask
 }
-
-bool MLiftUp = true;
-
-void liftM(){
-	MLiftObj.targetValue = (!MLiftUp)?MLiftObj.min:MLiftObj.max;
-	MLiftUp = !MLiftUp;
-}
-
 
 /************************************************************************************************
 
-AUTON RECORDING
+AUTON RECORDING- easy and cheap to get an auton. NOTE: RobotC has no way to save files- you cannot restart the robot or probably even turn off the controller or your new auton procedure will be erased! It is also an on-the-fly type of thing, good for skills
 
 *************************************************************************************************/
+//note: this code is still in beta and probably doesn't work entirely as intended. Because it's for advanced users only, there will be minimal comments/editing.
+//You have been warned.
 
+//like struct for PID system, one for each subsystem you want to record
 typedef struct autonSteps{
 	int length;
 	DynamicArray power, time;
@@ -318,13 +216,14 @@ typedef struct autonSteps{
 autonSteps_t autoSteps[7];
 
 void defineValues(){
-	autoSteps[0].motorTarget = LDEnc;
-	autoSteps[1].motorTarget = RDEnc;
-	autoSteps[2].motorTarget = liftL;
-	autoSteps[3].motorTarget = liftR;
-	autoSteps[4].motorTarget = MLift;
-	autoSteps[5].motorTarget = CLift;
-	autoSteps[6].motorTarget = CIntake;
+	//point each autonSteps struct to its corresponding motor to record- recording auton takes in motor power and time rather than sensor values and PID
+	autoSteps[0].motorTarget = port1;
+	autoSteps[1].motorTarget = port2;
+	autoSteps[2].motorTarget = port3;
+	autoSteps[3].motorTarget = port4;
+	autoSteps[4].motorTarget = port5;
+	autoSteps[5].motorTarget = port6;
+	autoSteps[6].motorTarget = port7;
 
 	for(int i = 0; i < 7; i++){
 		autoSteps[i].step = 0;
@@ -332,14 +231,18 @@ void defineValues(){
 		DynamicArrayInit(&autoSteps[i].time);
 	}
 }
+
+//BNSlib use- easily add to dynamic arrays
+//note: VEX cortex has limited RAM for this. It has been optimized to not use a lot of RAM, but long/complex auton procedures might overflow the memory.
+//Check the debug log in the debugger to see if BNSlib is complaining about memory limits.
 void record(int ind, int power, int time){
 	DynamicArrayAdd(&autoSteps[ind].power, power);
 	DynamicArrayAdd(&autoSteps[ind].time, time);
 }
 
+//runs only during auton
 void run(){
 	int currentStep = 0;
-
 		for(int i = 0; i < 7; i++){
 			while(bIfiAutonomousMode && currentStep < DynamicArrayAllocatedSize(&autoSteps[i].power)){
 			int currentMotorTarget = autoSteps[i].motorTarget;
@@ -356,25 +259,20 @@ void run(){
 
 /************************************************************************************************
 
-AUTON PROCEDURES
+AUTON PROCEDURES- define different types of autons here. Good for your robot so you can adjust w/ your alliance when needed.
 
 *************************************************************************************************/
 
-void initAuto(){
-	motor[CIntake] = 50;
-	motor[CLiftm] = -127;
-	CLiftManual = true;
-	liftToPos(1600);//high enough to lower MLift and CLift
-	liftM();
-	motor[CLiftm] = 127;
-	CLiftManual = false;
-	motor[CIntake] = 20;
-	liftCToPos(CLiftObj.max);
+void initAuto(){//common code that might need to be run at the start of auton, like if you need to lower a lift before anything. Can be optional, see below
 }
 
-//ISSUE: robot won't drive forward
+//example
 void driveToMobileGoal(){
-	initAuto();
+	initAuto();//you put this depending on if you need the initAuto function to run
+
+	/* NOTE: commented out because not all functions shown in code. Pretty much it's a hardcoded procedure moving the robot around the field and other stuff accurately with PID and auton functions from the above section
+
+
 	//liftToPos(1200);
 	//driveToPos(100, -100);
 	//driveToPos(60, 500, 500);
@@ -413,138 +311,90 @@ void driveToMobileGoal(){
 	*/
 }
 
+//place other autons below...
 void twentyAuto(){
-	driveToMobileGoal();
-	driveToPos(2000, 4000);
-	driveToPos(2500, 4500);
-	driveToPos(2000, 5000);
-	driveToPos(2500, 5500);
-	liftM();
-	driveToPos(2000, 5000);
+	//code here
 }
 
 void defenceAuto(){
-	driveToPos(-80, 10);
-	driveToPos(2020, 2210);
-	/*
-	driveToPos(1920, 2230);
-	driveToPos(2160, 2420);
-	driveToPos(1930, 2350);
-	//initAuto();
-	*/
+	//code here
 }
 
-void tenAuto(){
-	driveToMobileGoal();
-	driveToPos(2000, 5000);
-	liftM();
-	driveToPos(1500, 4500);
-}
-
-void fiveAuto(){
-	driveToMobileGoal();
-	liftM();
-	driveToPos(1000, 4000);
-}
-
-void altAuto(){
-	initAuto();
-	liftToPos(liftObjL.max);
-	driveToPos(500, 500);
-	liftToPos(liftObjL.max-100);
-	motor[CIntake] = -127;
-	liftToPos(liftObjL.max);
-	driveToPos(250, 250);
-	driveToPos(500, 0);
-}
-
+//for recording auton, could be simplified if you don't like one line functions
 void autoPlay(){
 	run();
 }
 
+//more autons below...
+
 /************************************************************************************************
 
-REQUIRED FUNCTIONS
+REQUIRED FUNCTIONS- the base of your code
 
 *************************************************************************************************/
 void pre_auton()
 {
-	BNS();
-	setValues();
+	BNS();//loads BNS
+	setValues();//see above
+
+	//see VEX documentation for this variable
 	bStopTasksBetweenModes = true;
 
+	//false for using the LCD
 	bDisplayCompetitionStatusOnLcd = false;
 
+	//optional, could save battery?
 	bLCDBacklight = true;
+
+	//see above. Mainly used with LCD
 	startTask(autonOptions);
 }
 
-
+//doesn't actually run any auton procedure- it calls the functions from the above section
 task autonomous()
 {
-	openOrClose = true;
-	if(currentAuton != 11) startTasks();
-	else startTasksPrerecorded();
-	if(SensorValue[powEx] < 300){
+
+	startTasks();//pretty much just call this at the start of auton/driver
+
+	if(SensorValue[dgtl1] < 300){//check if power expander is plugged in/charged
 		displayLCDPos(0,0);
 		displayNextLCDString("REPLACE/PLUG IN");
 		displayLCDPos(1,0);
 		displayNextLCDString("POWER EXPANDER");
 	}
-	else if(nImmediateBatteryLevel<300){
+
+	else if(nImmediateBatteryLevel<300){//check if main battery is charged enough. Note: may need to adjust the 300 value
 		displayLCDPos(0,0);
 		displayNextLCDString("REPLACE");
 		displayLCDPos(1,0);
 		displayNextLCDString("MAIN BATTERY");
 	}
+
+	//if all is good, start auton from whatever index currentAuton is above (which is changed in autonOptions)
 	else{
 		switch (currentAuton){
-		case 1://20L
-			RevLeftOrRight = true;
-		case 2://20R
-			twentyAuto();
+		case 1://first auton in autonModes[]
+			RevLeftOrRight = true;//flip left/right drivebase values, for mirroring left/right
+		case 2://second auton, which is just the first but on other side of field
+			driveToMobileGoal();
 			break;
 		case 3://10L
-			RevLeftOrRight = true;
-		case 4://10R
-			tenAuto();
-			break;
-		case 5://5L
-			RevLeftOrRight = true;
-		case 6://5R
-			fiveAuto();
-			break;
-		case 7://altL
-			RevLeftOrRight = true;
-		case 8://altR
-			altAuto();
-			break;
-		case 9://defenceL
-			RevLeftOrRight = true;
-		case 10://defenceR
-			defenceAuto();
-			break;
-		case 11://recordedPlay
-			run();
-			break;
-		case 12://record
-			break;
-
+			//...
 		}
 	}
 }
 
-bool autoRecord = false;
+bool autoRecord = false;//if autoRecord was set on LCD for auto recording an auton
 
 task usercontrol()
 {
 	BNS();
 	startTasks();
-	stopTask(autonOptions);
-	datalogClear();
+	stopTask(autonOptions);//LCD is used in user control to display battery levels
 
 	string mainBattery, backupBattery;
-	while (true)
+
+	while (true)//important!!!
 	{
 		clearLCDLine(0);
 		clearLCDLine(1);
@@ -556,8 +406,14 @@ task usercontrol()
 
 		//Display the Backup battery voltage
 		displayLCDString(1, 0, "Secondary: ");
-		sprintf(backupBattery, "%1.2f%c", SensorValue[powEx]/1000.0, 'V');
+		sprintf(backupBattery, "%1.2f%c", SensorValue[dgtl1]/1000.0, 'V');
 		displayNextLCDString(backupBattery);
+
+		/* auton recording while driving commented out below- can be moved into its own function
+
+		//initially set all values as needed
+		//note: data log used for help/debug while recording
+
 		if(currentAuton == 12){
 			autoRecord = true;
 			defineValues();
@@ -575,6 +431,8 @@ task usercontrol()
 			}
 			currentAuton = 11;
 		}
+
+		//continuously add values until out of memory, will continuously add to datalog
 		else if(currentAuton == 11){
 			//while(time <= 15000){
 			for(int i = 0; i < 7; i++){
@@ -592,6 +450,6 @@ task usercontrol()
 			//datalogDataGroupEnd();
 
 		}
-
+	*/
 	}
 }
